@@ -216,9 +216,7 @@ function createVehicleMcpServer(estimator: VehicleEstimator): McpServer {
           `Fourchette : ${result.valuation.lowPrice.toLocaleString("fr-FR")}–${result.valuation.highPrice.toLocaleString("fr-FR")} €`,
           `Confiance : ${result.valuation.confidence} (${result.valuation.confidenceScore}/100)`,
           `Comparables retenus : ${result.market.comparablesUsed} sur ${result.market.adsFetched} annonces`,
-          "",
-          "Données structurées complètes :",
-          JSON.stringify(result, null, 2),
+          "Les annonces et toutes leurs données sont disponibles dans structuredContent.",
         ].join("\n");
 
         return {

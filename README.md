@@ -17,16 +17,21 @@ because the server operates without sessions.
 
 ## Installation
 
-Requirements: Node.js 20 or newer and Python 3.11. The Python connector is used
-when Leboncoin's anti-bot protection blocks the direct HTTP request.
+Requirements: Node.js 20 or newer and Python 3.11. All Leboncoin network traffic
+goes through a persistent Python worker backed by `lbc`; the TypeScript process
+only exposes MCP and computes the valuation.
 
 ```bash
 npm install
-python3.11 -m pip install -r requirements.txt
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 npm start
 ```
 
 The server then exposes `http://127.0.0.1:3100/mcp`.
+
+On Windows, install the Python dependencies with
+`.venv\Scripts\python.exe -m pip install -r requirements.txt`.
 
 ## Commands
 
@@ -43,9 +48,17 @@ Available environment variables:
 - `MCP_PORT`: defaults to `3100`
 - `MCP_API_TOKEN`: required Bearer token when listening outside localhost
 - `MCP_ALLOWED_HOSTS`: comma-separated list of allowed hostnames
-- `LBC_FORCE_PYTHON=1`: always use the Python Leboncoin connector
-- `LBC_MAX_PAGES`: maximum number of pages fetched by the Python fallback;
-  defaults to `5`
+- `LBC_PYTHON_PATH`: explicit path to a Python executable with `lbc>=1.1.5`
+- `LBC_MAX_PAGES`: maximum number of pages fetched per search; defaults to `3`
+- `LBC_PAGE_DELAY_MS`: base delay between pages; defaults to `1500` ms and
+  includes randomized jitter
+- `LBC_MAX_RETRIES`: Datadome retries inside the Python client; defaults to `1`
+- `LBC_REQUEST_TIMEOUT_SECONDS`: timeout for each Python HTTP request; defaults
+  to `30`
+- `LBC_WORKER_TIMEOUT_MS`: maximum duration of a complete worker search;
+  defaults to `90000`
+- `LBC_PROXY_URL`: optional proxy URL, including credentials when required
+- `LBC_IMPERSONATE`: optional browser profile supported by `curl_cffi`
 - `VALUATION_CACHE_TTL_MS`: in-memory cache lifetime; defaults to 15 minutes
 
 ## Tool: `resolve_leboncoin_vehicle`

@@ -105,6 +105,13 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
         .valuation.estimatedPrice,
       5_000,
     );
+    assert.ok(
+      (response.content as Array<{ type: string; text?: string }>).some(
+        (item) =>
+          item.type === "text" &&
+          item.text?.includes("disponibles dans structuredContent"),
+      ),
+    );
   } finally {
     await client.close();
     await new Promise<void>((resolve, reject) =>

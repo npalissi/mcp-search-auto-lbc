@@ -11,7 +11,8 @@ export type LeboncoinSearchParams = {
   gearbox?: string; // '1'=manuelle, '2'=automatique
   priceMin?: number;
   priceMax?: number;
-  maxPages?: number; // pagination du pont Python uniquement
+  ownerType?: "private" | "pro" | "all";
+  maxPages?: number;
 };
 
 export type LeboncoinAttributeValue = string | number | boolean;

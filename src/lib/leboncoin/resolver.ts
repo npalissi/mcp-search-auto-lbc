@@ -1,4 +1,4 @@
-import { searchLeboncoin, searchLeboncoinViaPython } from "./client";
+import { searchLeboncoinViaPython } from "./client";
 import type { LeboncoinAd } from "./types";
 
 export type VehicleResolutionInput = {
@@ -349,21 +349,16 @@ export async function resolveLeboncoinVehicleWithDiscovery(
   };
 
   try {
-    ads = await searchLeboncoin(searchParams);
-  } catch (nativeError) {
-    console.error("[LBC resolver] Native discovery failed:", nativeError);
-    try {
-      ads = searchLeboncoinViaPython(searchParams);
-    } catch (pythonError) {
-      console.error("[LBC resolver] Python discovery failed:", pythonError);
-      return {
-        ...local,
-        warnings: [
-          ...local.warnings,
-          "Leboncoin n'a pas pu confirmer l'identifiant pour le moment.",
-        ],
-      };
-    }
+    ads = await searchLeboncoinViaPython(searchParams);
+  } catch (pythonError) {
+    console.error("[LBC resolver] Python discovery failed:", pythonError);
+    return {
+      ...local,
+      warnings: [
+        ...local.warnings,
+        "Leboncoin n'a pas pu confirmer l'identifiant pour le moment.",
+      ],
+    };
   }
 
   return resolveLeboncoinVehicle(input, ads);

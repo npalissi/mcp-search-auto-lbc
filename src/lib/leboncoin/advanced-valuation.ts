@@ -1,7 +1,6 @@
 import {
   fuelToLbcCode,
   gearboxToLbcCode,
-  searchLeboncoin,
   searchLeboncoinViaPython,
 } from "./client";
 import type { LeboncoinAd, LeboncoinAttributeValue } from "./types";
@@ -597,30 +596,16 @@ export async function estimateUsedVehicle(
     gearbox: effectiveRequest.gearbox
       ? gearboxToLbcCode(effectiveRequest.gearbox)
       : undefined,
+    ownerType: effectiveRequest.excludeProfessionalSellers
+      ? ("private" as const)
+      : ("all" as const),
   };
 
-  let ads: LeboncoinAd[] = [];
-  const sourceErrors: unknown[] = [];
-  if (process.env.LBC_FORCE_PYTHON !== "1") {
-    try {
-      ads = await searchLeboncoin(searchParams);
-    } catch (error) {
-      sourceErrors.push(error);
-      console.error("[MCP valuation] Native Leboncoin search failed:", error);
-    }
-  }
-
-  if (ads.length < 8) {
-    try {
-      const fallbackAds = searchLeboncoinViaPython(searchParams);
-      ads = uniqueAds([...ads, ...fallbackAds]);
-    } catch (error) {
-      sourceErrors.push(error);
-      console.error("[MCP valuation] Python Leboncoin search failed:", error);
-    }
-  }
-
-  if (ads.length === 0 && sourceErrors.length > 0) {
+  let ads: LeboncoinAd[];
+  try {
+    ads = uniqueAds(await searchLeboncoinViaPython(searchParams));
+  } catch (error) {
+    console.error("[MCP valuation] Python Leboncoin search failed:", error);
     throw new Error(
       "Leboncoin bloque temporairement la recherche. Réessaie dans quelques minutes.",
     );
