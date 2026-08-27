@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "brands": [
+    {
+      "id": "renault",
+      "name": "Renault",
+      "aliases": ["RENAULT"],
+      "models": [
+        {
+          "id": "clio",
+          "name": "Clio",
+          "aliases": ["Clio 3", "Clio III"],
+          "generations": [
+            {
+              "id": "clio-3",
+              "name": "Clio III",
+              "yearFrom": 2005,
+              "yearTo": 2014,
+              "engines": [
+                {
+                  "id": "k9k-15-dci-90",
+                  "name": "1.5 dCi 90",
+                  "aliases": ["1.5 DCI", "dCi 90"],
+                  "fuel": "diesel",
+                  "powerHp": 90
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

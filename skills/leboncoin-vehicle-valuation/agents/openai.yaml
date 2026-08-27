@@ -1,0 +1,11 @@
+interface:
+  display_name: "Leboncoin Vehicle Valuation"
+  short_description: "Normalise un véhicule puis calcule sa cote"
+  default_prompt: "Utilise $leboncoin-vehicle-valuation pour estimer la cote de mon véhicule avec des annonces comparables."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "mcp-search-auto-lbc"
+      description: "Résolution des identifiants Leboncoin et estimation automobile"
+      transport: "streamable_http"
+      url: "http://127.0.0.1:3100/mcp"
