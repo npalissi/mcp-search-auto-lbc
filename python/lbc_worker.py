@@ -8,6 +8,7 @@ import os
 import random
 import sys
 import time
+import uuid
 from importlib.metadata import version
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -17,6 +18,17 @@ import lbc
 
 MINIMUM_LBC_VERSION = (1, 1, 5)
 PAGE_SIZE = 35
+
+
+class MatchedMobileClient(lbc.Client):
+    """Use an Android User-Agent matching curl_cffi's Android TLS profile."""
+
+    def _generate_user_agent(self) -> str:
+        device_id = uuid.uuid4().hex[:16]
+        return (
+            "LBC;Android;14;Pixel 7;phone;"
+            f"{device_id};wifi;100.85.2"
+        )
 
 
 def parse_version(value: str) -> tuple[int, ...]:
@@ -50,11 +62,11 @@ def build_proxy() -> lbc.Proxy | None:
     )
 
 
-def build_client() -> lbc.Client:
+def build_client() -> MatchedMobileClient:
     retries = max(0, int(os.getenv("LBC_MAX_RETRIES", "1")))
     timeout = max(5.0, float(os.getenv("LBC_REQUEST_TIMEOUT_SECONDS", "30")))
-    impersonate = os.getenv("LBC_IMPERSONATE", "").strip() or None
-    return lbc.Client(
+    impersonate = os.getenv("LBC_IMPERSONATE", "").strip() or "chrome_android"
+    return MatchedMobileClient(
         proxy=build_proxy(),
         impersonate=impersonate,
         timeout=timeout,

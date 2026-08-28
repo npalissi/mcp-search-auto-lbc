@@ -19,7 +19,10 @@ because the server operates without sessions.
 
 Requirements: Node.js 20 or newer and Python 3.11. All Leboncoin network traffic
 goes through a persistent Python worker backed by `lbc`; the TypeScript process
-only exposes MCP and computes the valuation.
+only exposes MCP and computes the valuation. By default the worker pairs
+curl_cffi's `chrome_android` TLS profile with a matching Leboncoin Android
+User-Agent so Datadome sees one coherent client fingerprint. Both `lbc` and
+`curl-cffi` are pinned to the versions covered by the live integration test.
 
 ```bash
 npm install
@@ -58,7 +61,8 @@ Available environment variables:
 - `LBC_WORKER_TIMEOUT_MS`: maximum duration of a complete worker search;
   defaults to `90000`
 - `LBC_PROXY_URL`: optional proxy URL, including credentials when required
-- `LBC_IMPERSONATE`: optional browser profile supported by `curl_cffi`
+- `LBC_IMPERSONATE`: optional browser profile supported by `curl_cffi`;
+  defaults to the tested `chrome_android` profile
 - `VALUATION_CACHE_TTL_MS`: in-memory cache lifetime; defaults to 15 minutes
 
 ## Tool: `resolve_leboncoin_vehicle`

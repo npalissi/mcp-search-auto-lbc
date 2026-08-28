@@ -7,9 +7,10 @@
     "start": "tsx mcp/server.ts",
     "dev": "tsx watch mcp/server.ts",
     "test": "tsx --test src/lib/leboncoin/advanced-valuation.test.ts src/lib/leboncoin/resolver.test.ts mcp/server.test.ts",
-    "python:check": "python3.11 -m py_compile python/lbc_worker.py",
+    "python:test": ".venv/bin/python -m unittest discover -s python -p 'test_*.py'",
+    "python:check": "python3.11 -m py_compile python/lbc_worker.py python/test_lbc_worker.py",
     "typecheck": "tsc --noEmit",
-    "check": "npm run test && npm run typecheck && npm run python:check"
+    "check": "npm run test && npm run typecheck && npm run python:test && npm run python:check"
   },
   "engines": {
     "node": ">=20"
