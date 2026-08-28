@@ -37,6 +37,26 @@ contient une génération (`Clio III`) ou lorsque les champs `leboncoinBrand` et
 Pour construire ou diagnostiquer un payload brut, lire
 [references/leboncoin-identifiers.md](references/leboncoin-identifiers.md).
 
+## Filtres de recherche par défaut
+
+Sauf demande contraire de l'utilisateur, rechercher uniquement les annonces de
+particuliers avec `excludeProfessionalSellers: true`.
+
+Pour ce projet, utiliser par défaut une zone de 200 km autour de Saintes. Si
+l'utilisateur demande une autre ville ou un autre rayon, utiliser cette nouvelle
+zone à la place :
+
+```json
+{
+  "location": {
+    "city": "Saintes",
+    "latitude": 45.746,
+    "longitude": -0.633,
+    "radiusKm": 200
+  }
+}
+```
+
 ## Estimation
 
 Appeler `estimate_used_vehicle` avec les libellés naturels et, si disponibles,
