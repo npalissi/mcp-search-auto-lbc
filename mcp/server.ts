@@ -92,6 +92,17 @@ const vehicleInputSchema = {
     .boolean()
     .default(true)
     .describe("Exclure les annonces publiées par des vendeurs professionnels"),
+  location: z
+    .object({
+      city: z.string().trim().min(1).optional(),
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      radiusKm: z.number().int().min(1).max(200),
+    })
+    .optional()
+    .describe(
+      "Zone de recherche Leboncoin autour d'un point, avec un rayon de 1 à 200 km",
+    ),
   maxComparables: z.number().int().min(5).max(35).default(20),
   includeDescriptions: z.boolean().default(true),
   includeImages: z.boolean().default(true),

@@ -108,6 +108,33 @@ def owner_type(value: Any) -> lbc.OwnerType | None:
     return None
 
 
+def search_location(value: Any) -> lbc.City | None:
+    if not isinstance(value, dict):
+        return None
+
+    try:
+        latitude = float(value["latitude"])
+        longitude = float(value["longitude"])
+        radius_km = int(value["radiusKm"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(
+            "location requires numeric latitude, longitude and radiusKm."
+        ) from error
+
+    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+        raise ValueError("location coordinates are outside their valid ranges.")
+    if not 1 <= radius_km <= 200:
+        raise ValueError("location radiusKm must be between 1 and 200.")
+
+    city = str(value.get("city") or "").strip() or None
+    return lbc.City(
+        lat=latitude,
+        lng=longitude,
+        radius=radius_km * 1_000,
+        city=city,
+    )
+
+
 def serialize_ad(ad: lbc.Ad, selected_owner_type: str | None) -> dict[str, Any]:
     attributes = {
         key: attribute.value for key, attribute in (ad.attributes or {}).items()
@@ -178,6 +205,7 @@ class LeboncoinWorker:
         )
 
         selected_owner_type = str(params.get("ownerType") or "").lower() or None
+        selected_location = search_location(params.get("location"))
         maximum_pages = min(5, max(1, int(params.get("maxPages") or 3)))
         base_delay_ms = max(0, int(os.getenv("LBC_PAGE_DELAY_MS", "1500")))
         search_text = " ".join(
@@ -201,6 +229,7 @@ class LeboncoinWorker:
                 limit_alu=0,
                 ad_type=lbc.AdType.OFFER,
                 owner_type=owner_type(selected_owner_type),
+                locations=selected_location,
                 **enums,
                 **ranges,
             )

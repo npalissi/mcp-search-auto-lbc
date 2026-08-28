@@ -3,7 +3,11 @@ import {
   gearboxToLbcCode,
   searchLeboncoinViaPython,
 } from "./client";
-import type { LeboncoinAd, LeboncoinAttributeValue } from "./types";
+import type {
+  LeboncoinAd,
+  LeboncoinAttributeValue,
+  LeboncoinSearchLocation,
+} from "./types";
 import { resolveLeboncoinVehicle } from "./resolver";
 
 export type VehicleValuationRequest = {
@@ -20,6 +24,7 @@ export type VehicleValuationRequest = {
   trim?: string;
   excludeCompanyVehicles?: boolean;
   excludeProfessionalSellers?: boolean;
+  location?: LeboncoinSearchLocation;
   maxComparables?: number;
   includeDescriptions?: boolean;
   includeImages?: boolean;
@@ -599,6 +604,7 @@ export async function estimateUsedVehicle(
     ownerType: effectiveRequest.excludeProfessionalSellers
       ? ("private" as const)
       : ("all" as const),
+    location: effectiveRequest.location,
   };
 
   let ads: LeboncoinAd[];

@@ -120,6 +120,12 @@ Example input:
   "trim": "Dynamique",
   "excludeCompanyVehicles": true,
   "excludeProfessionalSellers": true,
+  "location": {
+    "city": "Saintes",
+    "latitude": 45.746,
+    "longitude": -0.633,
+    "radiusKm": 200
+  },
   "maxComparables": 20,
   "includeDescriptions": true,
   "includeImages": true

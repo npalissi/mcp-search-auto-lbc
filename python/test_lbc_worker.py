@@ -5,7 +5,7 @@ import re
 import unittest
 from unittest.mock import patch
 
-from lbc_worker import MatchedMobileClient, build_client
+from lbc_worker import MatchedMobileClient, build_client, search_location
 
 
 class MatchedMobileClientTests(unittest.TestCase):
@@ -35,6 +35,23 @@ class MatchedMobileClientTests(unittest.TestCase):
             timeout=30.0,
             max_retries=1,
         )
+
+    def test_builds_a_leboncoin_city_with_radius_in_metres(self) -> None:
+        location = search_location(
+            {
+                "city": "Saintes",
+                "latitude": 45.746,
+                "longitude": -0.633,
+                "radiusKm": 200,
+            }
+        )
+
+        self.assertIsNotNone(location)
+        assert location is not None
+        self.assertEqual(location.city, "Saintes")
+        self.assertEqual(location.lat, 45.746)
+        self.assertEqual(location.lng, -0.633)
+        self.assertEqual(location.radius, 200_000)
 
 
 if __name__ == "__main__":

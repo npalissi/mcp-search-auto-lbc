@@ -1,3 +1,10 @@
+export type LeboncoinSearchLocation = {
+  city?: string;
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+};
+
 export type LeboncoinSearchParams = {
   brand: string;
   model: string;
@@ -12,6 +19,7 @@ export type LeboncoinSearchParams = {
   priceMin?: number;
   priceMax?: number;
   ownerType?: "private" | "pro" | "all";
+  location?: LeboncoinSearchLocation;
   maxPages?: number;
 };
 

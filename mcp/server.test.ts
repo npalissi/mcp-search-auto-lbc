@@ -42,12 +42,14 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
   let receivedBrand = "";
   let receivedExcludeCompanyVehicles = false;
   let receivedExcludeProfessionalSellers = false;
+  let receivedRadiusKm = 0;
   const app = createMcpHttpApp({
     estimator: async (request) => {
       receivedBrand = request.brand;
       receivedExcludeCompanyVehicles = request.excludeCompanyVehicles ?? false;
       receivedExcludeProfessionalSellers =
         request.excludeProfessionalSellers ?? false;
+      receivedRadiusKm = request.location?.radiusKm ?? 0;
       return { ...fixture, request };
     },
   });
@@ -93,6 +95,12 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
         mileage: 100_000,
         fuel: "diesel",
         excludeCompanyVehicles: true,
+        location: {
+          city: "Saintes",
+          latitude: 45.746,
+          longitude: -0.633,
+          radiusKm: 200,
+        },
       },
     });
 
@@ -100,6 +108,7 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
     assert.equal(receivedBrand, "Renault");
     assert.equal(receivedExcludeCompanyVehicles, true);
     assert.equal(receivedExcludeProfessionalSellers, true);
+    assert.equal(receivedRadiusKm, 200);
     assert.equal(
       (response.structuredContent as { valuation: { estimatedPrice: number } })
         .valuation.estimatedPrice,
