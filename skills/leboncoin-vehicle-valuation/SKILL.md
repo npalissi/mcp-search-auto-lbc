@@ -1,6 +1,6 @@
 ---
 name: leboncoin-vehicle-valuation
-description: Normaliser les noms automobiles pour les filtres Leboncoin et estimer une cote française à partir d'annonces comparables. Utiliser pour toute demande de cote, valeur de marché ou recherche de comparables d'un véhicule d'occasion sur Leboncoin.
+description: Normaliser les noms automobiles, analyser les descriptions d'annonces et estimer une cote française à partir de comparables Leboncoin. Utiliser pour toute demande de cote, valeur de marché ou recherche automobile comportant des critères précis.
 ---
 
 # Leboncoin Vehicle Valuation
@@ -20,6 +20,20 @@ résolveur retourne plusieurs alternatives proches. Une motorisation ou une
 finition absente n'empêche pas une première estimation, mais doit réduire la
 précision annoncée.
 
+## Catalogue Leboncoin
+
+Le catalogue est synchronisé depuis les données utilisées par le frontend
+Leboncoin. Ne pas inventer les codes de marque, modèle ou finition.
+
+- Utiliser `list_leboncoin_vehicle_brands` pour confirmer une marque inconnue ou
+  ambiguë.
+- Utiliser `list_leboncoin_vehicle_models` avec une marque et une recherche
+  ciblée pour distinguer des modèles proches, par exemple C3 et C3 Aircross.
+- Utiliser `list_leboncoin_vehicle_trims` après résolution du modèle lorsqu'une
+  finition précise change la sélection des comparables.
+- Préférer des requêtes ciblées avec une petite limite au chargement de tout le
+  catalogue dans le contexte du modèle.
+
 ## Résolution des identifiants
 
 Appeler `resolve_leboncoin_vehicle` lorsque la marque ou le modèle est ambigu,
@@ -33,6 +47,8 @@ contient une génération (`Clio III`) ou lorsque les champs `leboncoinBrand` et
   véhicule recherché.
 - Ne jamais transformer soi-même `Clio 3` en `RENAULT_Clio_3` : la génération
   reste séparée du modèle Leboncoin.
+- Si une finition a seulement été rapprochée d'une valeur du catalogue, conserver
+  l'avertissement et la vérifier dans le texte de chaque annonce.
 
 Pour construire ou diagnostiquer un payload brut, lire
 [references/leboncoin-identifiers.md](references/leboncoin-identifiers.md).
@@ -57,11 +73,48 @@ zone à la place :
 }
 ```
 
+## Lecture obligatoire des annonces
+
+La lecture des annonces est indispensable, surtout lorsque l'utilisateur donne
+des critères précis. Les filtres structurés servent à récupérer des candidats ;
+ils ne remplacent pas la vérification du contenu.
+
+- Appeler `estimate_used_vehicle` avec `includeDescriptions: true`. Utiliser
+  `descriptionMaxChars: 5000` pour une recherche précise afin d'éviter qu'une
+  information déterminante soit tronquée.
+- Activer `includeImages: true` lorsqu'un critère peut nécessiter une
+  confirmation visuelle. Une image ne prouve pas une caractéristique cachée ou
+  illisible.
+- Pour chaque comparable retenu, lire conjointement `title`, `characteristics`
+  et `description`. Ne jamais décider à partir du titre seul.
+- Avant l'analyse, distinguer les critères obligatoires, les motifs d'exclusion
+  et les simples préférences. Vérifier notamment les mentions de société,
+  nombre de places, finition, moteur, boîte, équipements, état, dommages,
+  travaux, importation, batterie en location et TVA récupérable lorsqu'elles
+  sont pertinentes pour la demande.
+- Une caractéristique structurée explicite prime sur une formulation vague de
+  la description. Une contradiction rend l'annonce incompatible ou au minimum
+  incertaine et doit être signalée.
+- L'absence d'une information n'est jamais une confirmation. Classer chaque
+  annonce comme `confirmée`, `incompatible` ou `non confirmée` pour les critères
+  demandés. Pour un critère obligatoire, ne conserver que les annonces
+  confirmées ; pour une préférence, conserver séparément les cas non confirmés.
+- Toujours appliquer d'abord les filtres natifs disponibles, notamment
+  `excludeProfessionalSellers`, `excludeCompanyVehicles`, le carburant, la boîte
+  et la finition, puis effectuer cette vérification sémantique.
+
+Si cette lecture retire une part importante des comparables, ne pas présenter la
+cote initiale comme si elle portait sur le sous-ensemble précis. Avec au moins
+cinq annonces confirmées, recalculer une médiane et une fourchette à partir de
+leurs prix. En dessous de cinq, présenter le résultat précis comme peu fiable et
+distinguer clairement la cote générale du modèle.
+
 ## Estimation
 
 Appeler `estimate_used_vehicle` avec les libellés naturels et, si disponibles,
 les identifiants exacts issus du résolveur. Laisser le tool effectuer la
-validation finale, les exclusions et le calcul statistique.
+validation initiale, les exclusions natives et le calcul statistique. Effectuer
+ensuite la lecture sémantique décrite ci-dessus pour toute contrainte spécifique.
 
 Ne pas présenter le résultat comme une expertise garantie. Distinguer :
 
@@ -80,6 +133,7 @@ connaissances générales du modèle.
 
 Répondre dans la langue de l'utilisateur. Donner d'abord la cote et sa
 fourchette, puis une justification courte basée sur les comparables. Mentionner
-les exclusions ou limites qui changent matériellement l'interprétation. Fournir
-quelques liens d'annonces seulement lorsqu'ils apportent une preuve utile ou que
-l'utilisateur les demande.
+le nombre d'annonces confirmées, non confirmées et exclues lorsque des critères
+précis ont été demandés. Mentionner les exclusions ou limites qui changent
+matériellement l'interprétation. Fournir quelques liens d'annonces seulement
+lorsqu'ils apportent une preuve utile ou que l'utilisateur les demande.
