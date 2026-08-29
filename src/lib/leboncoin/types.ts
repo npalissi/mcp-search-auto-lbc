@@ -5,6 +5,30 @@ export type LeboncoinSearchLocation = {
   radiusKm: number;
 };
 
+export type LeboncoinCatalogOption = {
+  value: string;
+  label: string;
+};
+
+export type LeboncoinVehicleCatalogBrand = LeboncoinCatalogOption & {
+  models: LeboncoinCatalogOption[];
+};
+
+export type LeboncoinVehicleCatalog = {
+  version: number;
+  sourceVersion: string;
+  fetchedAt: string;
+  cacheStatus: "fresh" | "refreshed" | "stale";
+  brands: LeboncoinVehicleCatalogBrand[];
+};
+
+export type LeboncoinVehicleTrims = {
+  model: string;
+  fetchedAt: string;
+  cacheStatus: "fresh" | "refreshed" | "stale";
+  values: LeboncoinCatalogOption[];
+};
+
 export type LeboncoinSearchParams = {
   brand: string;
   model: string;

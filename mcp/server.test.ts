@@ -68,6 +68,15 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
     const tools = await client.listTools();
     assert.ok(tools.tools.some((tool) => tool.name === "estimate_used_vehicle"));
     assert.ok(tools.tools.some((tool) => tool.name === "resolve_leboncoin_vehicle"));
+    assert.ok(
+      tools.tools.some((tool) => tool.name === "list_leboncoin_vehicle_brands"),
+    );
+    assert.ok(
+      tools.tools.some((tool) => tool.name === "list_leboncoin_vehicle_models"),
+    );
+    assert.ok(
+      tools.tools.some((tool) => tool.name === "list_leboncoin_vehicle_trims"),
+    );
 
     const resolution = await client.callTool({
       name: "resolve_leboncoin_vehicle",

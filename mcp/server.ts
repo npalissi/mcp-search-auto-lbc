@@ -8,7 +8,15 @@ import {
   type AdvancedVehicleValuation,
   type VehicleValuationRequest,
 } from "../src/lib/leboncoin/advanced-valuation";
+import {
+  getLeboncoinVehicleCatalogViaPython,
+  getLeboncoinVehicleTrimsViaPython,
+} from "../src/lib/leboncoin/client";
 import { resolveLeboncoinVehicleWithDiscovery } from "../src/lib/leboncoin/resolver";
+import type {
+  LeboncoinCatalogOption,
+  LeboncoinVehicleCatalogBrand,
+} from "../src/lib/leboncoin/types";
 
 type TransportRequest = Parameters<StreamableHTTPServerTransport["handleRequest"]>[0];
 type TransportResponse = Parameters<StreamableHTTPServerTransport["handleRequest"]>[1];
@@ -124,46 +132,92 @@ const resolverInputSchema = {
   generation: z.string().trim().min(1).optional(),
   fuel: z.string().trim().min(1).optional(),
   engine: z.string().trim().min(1).optional(),
+  trim: z.string().trim().min(1).optional(),
   discoverFromLeboncoin: z
     .boolean()
     .default(true)
     .describe("Confirmer les modèles inconnus à partir des attributs d'annonces Leboncoin"),
 };
 
+const catalogQuerySchema = {
+  query: z.string().trim().optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+};
+
+const catalogModelsSchema = {
+  brand: z
+    .string()
+    .trim()
+    .min(1)
+    .describe("Marque naturelle ou identifiant Leboncoin, par exemple Citroën ou CITROEN"),
+  ...catalogQuerySchema,
+};
+
+const catalogTrimsSchema = {
+  leboncoinModel: z
+    .string()
+    .trim()
+    .min(1)
+    .describe("Identifiant exact Leboncoin du modèle, par exemple CITROEN_C3"),
+  ...catalogQuerySchema,
+};
+
 const catalogSchema = {
   version: 1,
   purpose:
-    "Format attendu pour le futur catalogue de normalisation marque/modèle/génération/moteur/carburant.",
-  brand: {
-    id: "renault",
-    name: "Renault",
-    aliases: ["RENAULT"],
-    models: [
-      {
-        id: "clio",
-        name: "Clio",
-        aliases: ["Clio III", "Clio 3"],
-        generations: [
-          {
-            id: "clio-3",
-            name: "Clio III",
-            yearFrom: 2005,
-            yearTo: 2014,
-            engines: [
-              {
-                id: "k9k-15-dci-90",
-                name: "1.5 dCi 90",
-                aliases: ["1.5 DCI", "dCi 90"],
-                fuel: "diesel",
-                powerHp: 90,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  },
+    "Structure du catalogue marques/modèles synchronisé depuis les données frontend Leboncoin.",
+  cacheStatus: "fresh | refreshed | stale",
+  fetchedAt: "ISO-8601",
+  brands: [
+    {
+      value: "RENAULT",
+      label: "RENAULT",
+      models: [
+        {
+          value: "RENAULT_Clio",
+          label: "Clio",
+        },
+      ],
+    },
+  ],
 };
+
+function normalizeCatalogText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function matchingOptions(
+  options: LeboncoinCatalogOption[],
+  query: string | undefined,
+  limit: number,
+): LeboncoinCatalogOption[] {
+  const normalizedQuery = normalizeCatalogText(query ?? "");
+  return options
+    .filter(
+      (option) =>
+        !normalizedQuery ||
+        normalizeCatalogText(option.value).includes(normalizedQuery) ||
+        normalizeCatalogText(option.label).includes(normalizedQuery),
+    )
+    .slice(0, limit);
+}
+
+function findCatalogBrand(
+  brands: LeboncoinVehicleCatalogBrand[],
+  value: string,
+): LeboncoinVehicleCatalogBrand | undefined {
+  const normalized = normalizeCatalogText(value);
+  return brands.find(
+    (brand) =>
+      normalizeCatalogText(brand.value) === normalized ||
+      normalizeCatalogText(brand.label) === normalized,
+  );
+}
 
 function createVehicleMcpServer(estimator: VehicleEstimator): McpServer {
   const server = new McpServer(
@@ -173,7 +227,119 @@ function createVehicleMcpServer(estimator: VehicleEstimator): McpServer {
     },
     {
       instructions:
-        "Utilise resolve_leboncoin_vehicle pour normaliser les noms ambigus, puis estimate_used_vehicle pour obtenir une cote automobile française fondée sur des annonces comparables. Fournis autant que possible marque, modèle, génération, année, kilométrage, carburant et moteur. Ne présente jamais la cote comme une expertise garantie.",
+        "Utilise resolve_leboncoin_vehicle pour normaliser les noms ambigus depuis le catalogue Leboncoin, puis estimate_used_vehicle pour obtenir une cote automobile française fondée sur des annonces comparables. Les tools list_leboncoin_vehicle_* servent à explorer les marques, modèles et finitions lorsque l'utilisateur le demande ou qu'une ambiguïté subsiste. Fournis autant que possible marque, modèle, génération, année, kilométrage, carburant et moteur. Ne présente jamais la cote comme une expertise garantie.",
+    },
+  );
+
+  server.registerTool(
+    "list_leboncoin_vehicle_brands",
+    {
+      title: "Lister les marques automobiles Leboncoin",
+      description:
+        "Retourne les marques du catalogue actuellement publié par Leboncoin. Utiliser query pour limiter la réponse au lieu de charger tout le catalogue dans le contexte.",
+      inputSchema: catalogQuerySchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ query, limit }) => {
+      const catalog = await getLeboncoinVehicleCatalogViaPython();
+      const brands = matchingOptions(
+        catalog.brands.map(({ value, label }) => ({ value, label })),
+        query,
+        limit,
+      );
+      const result = {
+        query,
+        total: brands.length,
+        sourceVersion: catalog.sourceVersion,
+        fetchedAt: catalog.fetchedAt,
+        cacheStatus: catalog.cacheStatus,
+        brands,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "list_leboncoin_vehicle_models",
+    {
+      title: "Lister les modèles automobiles Leboncoin",
+      description:
+        "Retourne les identifiants exacts u_car_model pour une marque du catalogue Leboncoin.",
+      inputSchema: catalogModelsSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ brand, query, limit }) => {
+      const catalog = await getLeboncoinVehicleCatalogViaPython();
+      const catalogBrand = findCatalogBrand(catalog.brands, brand);
+      if (!catalogBrand) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text" as const,
+              text: `Marque absente du catalogue Leboncoin : ${brand}`,
+            },
+          ],
+        };
+      }
+      const models = matchingOptions(catalogBrand.models, query, limit);
+      const result = {
+        brand: { value: catalogBrand.value, label: catalogBrand.label },
+        query,
+        total: models.length,
+        fetchedAt: catalog.fetchedAt,
+        cacheStatus: catalog.cacheStatus,
+        models,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "list_leboncoin_vehicle_trims",
+    {
+      title: "Lister les finitions automobiles Leboncoin",
+      description:
+        "Retourne les identifiants exacts u_car_finition pour un u_car_model Leboncoin.",
+      inputSchema: catalogTrimsSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ leboncoinModel, query, limit }) => {
+      const trims = await getLeboncoinVehicleTrimsViaPython(leboncoinModel);
+      const values = matchingOptions(trims.values, query, limit);
+      const result = {
+        leboncoinModel,
+        query,
+        total: values.length,
+        fetchedAt: trims.fetchedAt,
+        cacheStatus: trims.cacheStatus,
+        trims: values,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
     },
   );
 

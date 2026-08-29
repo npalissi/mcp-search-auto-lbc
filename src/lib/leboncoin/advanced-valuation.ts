@@ -8,7 +8,7 @@ import type {
   LeboncoinAttributeValue,
   LeboncoinSearchLocation,
 } from "./types";
-import { resolveLeboncoinVehicle } from "./resolver";
+import { resolveLeboncoinVehicleWithDiscovery } from "./resolver";
 
 export type VehicleValuationRequest = {
   brand: string;
@@ -561,13 +561,14 @@ export async function estimateUsedVehicle(
   if (cached && cached.expiresAt > Date.now()) return cached.result;
   if (cached) valuationCache.delete(cacheKey);
 
-  const resolution = resolveLeboncoinVehicle({
+  const resolution = await resolveLeboncoinVehicleWithDiscovery({
     brand: request.brand,
     model: request.model,
     generation: request.generation,
     fuel: request.fuel,
     engine: request.engine,
-    discoverFromLeboncoin: false,
+    trim: request.trim,
+    discoverFromLeboncoin: true,
   });
   const useResolvedIdentifiers = resolution.confidenceScore >= 90;
   const effectiveRequest: VehicleValuationRequest = {
@@ -576,6 +577,7 @@ export async function estimateUsedVehicle(
     model: resolution.model || request.model,
     generation: resolution.generation ?? request.generation,
     fuel: resolution.fuel ?? request.fuel,
+    trim: resolution.trim ?? request.trim,
     leboncoinBrand:
       request.leboncoinBrand ??
       (useResolvedIdentifiers ? resolution.leboncoinBrand : undefined),
@@ -618,6 +620,9 @@ export async function estimateUsedVehicle(
   }
 
   const result = calculateAdvancedValuation(effectiveRequest, ads);
+  result.warnings = [
+    ...new Set([...resolution.warnings, ...result.warnings]),
+  ];
   const cacheTtlMs = Math.max(
     60_000,
     Number(process.env.VALUATION_CACHE_TTL_MS ?? 15 * 60_000),

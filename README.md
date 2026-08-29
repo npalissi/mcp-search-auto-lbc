@@ -63,6 +63,10 @@ Available environment variables:
 - `LBC_PROXY_URL`: optional proxy URL, including credentials when required
 - `LBC_IMPERSONATE`: optional browser profile supported by `curl_cffi`;
   defaults to the tested `chrome_android` profile
+- `LBC_CATALOG_CACHE_SECONDS`: lifetime of the Leboncoin brand/model/trim
+  catalog cache; defaults to 24 hours
+- `LBC_CATALOG_CACHE_PATH`: catalog cache file; defaults to
+  `.cache/leboncoin-vehicle-catalog.json`
 - `VALUATION_CACHE_TTL_MS`: in-memory cache lifetime; defaults to 15 minutes
 
 ## Tool: `resolve_leboncoin_vehicle`
@@ -193,9 +197,23 @@ Condensed output example:
 }
 ```
 
-Future catalog data should follow
-[`catalog.example.json`](./mcp/catalog.example.json). The server also publishes
-this structure as an MCP resource at `vehicle://catalog/schema`.
+## Live vehicle catalog
+
+Brands and models are synchronized by the Python worker from the same frontend
+configuration currently used by Leboncoin. Trims are fetched lazily for a
+selected model. The compact catalog is cached locally for 24 hours and a stale
+cache remains usable during a temporary upstream failure.
+
+The MCP exposes three targeted tools so an LLM never needs to load the full
+catalog into its context:
+
+- `list_leboncoin_vehicle_brands`
+- `list_leboncoin_vehicle_models`
+- `list_leboncoin_vehicle_trims`
+
+`resolve_leboncoin_vehicle` uses this catalog automatically before falling back
+to observed listing attributes. The catalog structure is also published as an
+MCP resource at `vehicle://catalog/schema`.
 
 ## Connecting an MCP client
 

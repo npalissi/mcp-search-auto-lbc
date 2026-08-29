@@ -1,7 +1,32 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveLeboncoinVehicle } from "./resolver";
-import type { LeboncoinAd } from "./types";
+import {
+  resolveLeboncoinTrimFromCatalog,
+  resolveLeboncoinVehicle,
+  resolveLeboncoinVehicleFromCatalog,
+} from "./resolver";
+import type {
+  LeboncoinAd,
+  LeboncoinVehicleCatalog,
+  LeboncoinVehicleTrims,
+} from "./types";
+
+const dynamicCatalog: LeboncoinVehicleCatalog = {
+  version: 1,
+  sourceVersion: "test",
+  fetchedAt: "2026-08-29T08:00:00.000Z",
+  cacheStatus: "fresh",
+  brands: [
+    {
+      value: "CITROEN",
+      label: "CITROEN",
+      models: [
+        { value: "CITROEN_C3", label: "C3" },
+        { value: "CITROEN_C3 Aircross", label: "C3 Aircross" },
+      ],
+    },
+  ],
+};
 
 test("résout une Clio III avec les identifiants exacts Leboncoin", () => {
   const result = resolveLeboncoinVehicle({
@@ -51,4 +76,48 @@ test("préfère les valeurs réellement observées dans les annonces", () => {
   assert.equal(result.leboncoinBrand, "SKODA");
   assert.equal(result.leboncoinModel, "SKODA_Octavia");
   assert.equal(result.source, "leboncoin-observed");
+});
+
+test("résout un modèle absent du catalogue manuel depuis le catalogue Leboncoin", () => {
+  const result = resolveLeboncoinVehicleFromCatalog(
+    { brand: "Citroën", model: "C3 III", fuel: "diesel" },
+    dynamicCatalog,
+  );
+
+  assert.equal(result?.leboncoinBrand, "CITROEN");
+  assert.equal(result?.leboncoinModel, "CITROEN_C3");
+  assert.equal(result?.generation, "3");
+  assert.equal(result?.source, "leboncoin-catalog");
+  assert.equal(result?.confidenceScore, 99);
+});
+
+test("ne confond pas C3 et C3 Aircross dans le catalogue dynamique", () => {
+  const result = resolveLeboncoinVehicleFromCatalog(
+    { brand: "CITROEN", model: "C3 Aircross" },
+    dynamicCatalog,
+  );
+
+  assert.equal(result?.leboncoinModel, "CITROEN_C3 Aircross");
+  assert.equal(result?.confidenceScore, 100);
+});
+
+test("résout une finition Leboncoin exacte ou préfixée", () => {
+  const trims: LeboncoinVehicleTrims = {
+    model: "CITROEN_C3",
+    fetchedAt: "2026-08-29T08:00:00.000Z",
+    cacheStatus: "fresh",
+    values: [
+      { value: "CITROEN_C3_Feel", label: "Feel" },
+      { value: "CITROEN_C3_Feel Business", label: "Feel Business" },
+    ],
+  };
+
+  assert.equal(
+    resolveLeboncoinTrimFromCatalog("Feel Nav", trims)?.value,
+    "CITROEN_C3_Feel",
+  );
+  assert.equal(
+    resolveLeboncoinTrimFromCatalog("Feel Business", trims)?.value,
+    "CITROEN_C3_Feel Business",
+  );
 });

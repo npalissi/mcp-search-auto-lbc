@@ -1,5 +1,15 @@
-import { searchLeboncoinViaPython } from "./client";
-import type { LeboncoinAd } from "./types";
+import {
+  getLeboncoinVehicleCatalogViaPython,
+  getLeboncoinVehicleTrimsViaPython,
+  searchLeboncoinViaPython,
+} from "./client";
+import type {
+  LeboncoinAd,
+  LeboncoinCatalogOption,
+  LeboncoinVehicleCatalog,
+  LeboncoinVehicleCatalogBrand,
+  LeboncoinVehicleTrims,
+} from "./types";
 
 export type VehicleResolutionInput = {
   brand?: string;
@@ -7,6 +17,7 @@ export type VehicleResolutionInput = {
   generation?: string;
   fuel?: string;
   engine?: string;
+  trim?: string;
   discoverFromLeboncoin?: boolean;
 };
 
@@ -20,8 +31,15 @@ export type VehicleResolution = {
   fuel?: string;
   leboncoinFuel?: string;
   engine?: string;
+  trim?: string;
+  leboncoinTrim?: string;
   confidenceScore: number;
-  source: "catalog" | "leboncoin-observed" | "heuristic" | "ambiguous";
+  source:
+    | "catalog"
+    | "leboncoin-catalog"
+    | "leboncoin-observed"
+    | "heuristic"
+    | "ambiguous";
   warnings: string[];
   alternatives: Array<{
     leboncoinBrand: string;
@@ -206,6 +224,119 @@ function similarity(a: string, b: string): number {
   return Math.max(0, 1 - editDistance(left, right) / Math.max(left.length, right.length));
 }
 
+function generationSuffix(value: string): string | undefined {
+  const match = normalize(value).match(
+    /^(?:(?:generation|gen|phase|ph)\s*)?([1-8]|i{1,3}|iv|v(?:i{0,3})?)$/,
+  );
+  return match ? normalizeGeneration(match[1]) : undefined;
+}
+
+function catalogBrandFor(
+  catalog: LeboncoinVehicleCatalog,
+  requestedBrand: string | undefined,
+): LeboncoinVehicleCatalogBrand | undefined {
+  const normalized = normalize(requestedBrand);
+  const localBrand = findBrand(requestedBrand);
+  return catalog.brands.find(
+    (brand) =>
+      normalize(brand.value) === normalized ||
+      normalize(brand.label) === normalized ||
+      brand.value === localBrand?.id,
+  );
+}
+
+function catalogModelCandidates(
+  requestedModel: string,
+  brand: LeboncoinVehicleCatalogBrand,
+): Array<{ option: LeboncoinCatalogOption; score: number; generation?: string }> {
+  const requested = normalize(requestedModel);
+  return brand.models
+    .map((option) => {
+      const label = normalize(option.label);
+      const identifier = normalize(option.value);
+      if (requested === label || requested === identifier) {
+        return { option, score: 1 };
+      }
+      if (requested.startsWith(`${label} `)) {
+        const generation = generationSuffix(requested.slice(label.length).trim());
+        if (generation) return { option, score: 0.99, generation };
+      }
+      return { option, score: similarity(requestedModel, option.label) };
+    })
+    .sort((left, right) => right.score - left.score);
+}
+
+export function resolveLeboncoinVehicleFromCatalog(
+  input: VehicleResolutionInput,
+  catalog: LeboncoinVehicleCatalog,
+): VehicleResolution | undefined {
+  let brand = catalogBrandFor(catalog, input.brand);
+  if (!brand && !input.brand) {
+    const matches = catalog.brands.flatMap((candidateBrand) =>
+      catalogModelCandidates(input.model, candidateBrand)
+        .filter((candidate) => candidate.score === 1)
+        .map((candidate) => ({ brand: candidateBrand, candidate })),
+    );
+    if (matches.length === 1) brand = matches[0]?.brand;
+  }
+  if (!brand) return undefined;
+
+  const candidates = catalogModelCandidates(input.model, brand);
+  const best = candidates[0];
+  if (!best || best.score < 0.8) return undefined;
+  const fuel = resolveFuel(input.fuel);
+  const localBrand = findBrand(brand.value);
+  const warnings =
+    catalog.cacheStatus === "stale"
+      ? ["Le catalogue Leboncoin en cache est périmé mais reste exploitable."]
+      : [];
+
+  return {
+    resolved: true,
+    brand: localBrand?.display ?? brand.label,
+    model: best.option.label,
+    leboncoinBrand: brand.value,
+    leboncoinModel: best.option.value,
+    generation:
+      normalizeGeneration(input.generation) ?? best.generation,
+    fuel: fuel?.value ?? input.fuel,
+    leboncoinFuel: fuel?.code,
+    engine: input.engine,
+    trim: input.trim,
+    confidenceScore: Math.round(best.score * 100),
+    source: "leboncoin-catalog",
+    warnings,
+    alternatives: candidates.slice(0, 5).map((candidate) => ({
+      leboncoinBrand: brand.value,
+      leboncoinModel: candidate.option.value,
+      score: Math.round(candidate.score * 100) / 100,
+    })),
+  };
+}
+
+export function resolveLeboncoinTrimFromCatalog(
+  requestedTrim: string | undefined,
+  trims: LeboncoinVehicleTrims,
+): LeboncoinCatalogOption | undefined {
+  if (!requestedTrim) return undefined;
+  const requested = normalize(requestedTrim);
+  const ranked = trims.values
+    .map((option) => {
+      const label = normalize(option.label);
+      const score =
+        requested === label
+          ? 1
+          : requested.startsWith(`${label} `)
+            ? 0.9
+            : similarity(requestedTrim, option.label);
+      return { option, score };
+    })
+    .sort((left, right) => right.score - left.score);
+  return ranked[0] && ranked[0].score >= 0.75
+    ? ranked[0].option
+    : undefined;
+}
+
 function resolveFuel(value: string | undefined) {
   const normalized = normalize(value);
   if (!normalized) return undefined;
@@ -289,6 +420,7 @@ export function resolveLeboncoinVehicle(
       fuel: fuel?.value ?? input.fuel,
       leboncoinFuel: fuel?.code,
       engine: input.engine,
+      trim: input.trim,
       confidenceScore: Math.round(observed.score * 100),
       source: "leboncoin-observed",
       warnings,
@@ -307,6 +439,7 @@ export function resolveLeboncoinVehicle(
       fuel: fuel?.value ?? input.fuel,
       leboncoinFuel: fuel?.code,
       engine: input.engine,
+      trim: input.trim,
       confidenceScore: 98,
       source: "catalog",
       warnings,
@@ -328,6 +461,7 @@ export function resolveLeboncoinVehicle(
     fuel: fuel?.value ?? input.fuel,
     leboncoinFuel: fuel?.code,
     engine: input.engine,
+    trim: input.trim,
     confidenceScore: brand ? 65 : 30,
     source: brand ? "heuristic" : "ambiguous",
     warnings,
@@ -339,7 +473,57 @@ export async function resolveLeboncoinVehicleWithDiscovery(
   input: VehicleResolutionInput,
 ): Promise<VehicleResolution> {
   const local = resolveLeboncoinVehicle(input);
-  if (local.source === "catalog" || input.discoverFromLeboncoin === false) return local;
+  if (input.discoverFromLeboncoin === false) return local;
+
+  let catalogWarning: string | undefined;
+  try {
+    const catalog = await getLeboncoinVehicleCatalogViaPython();
+    const catalogResolution = resolveLeboncoinVehicleFromCatalog(input, catalog);
+    if (catalogResolution) {
+      if (input.trim && catalogResolution.leboncoinModel) {
+        try {
+          const trims = await getLeboncoinVehicleTrimsViaPython(
+            catalogResolution.leboncoinModel,
+          );
+          const trim = resolveLeboncoinTrimFromCatalog(input.trim, trims);
+          if (trim) {
+            catalogResolution.trim = trim.label;
+            catalogResolution.leboncoinTrim = trim.value;
+            if (normalize(input.trim) !== normalize(trim.label)) {
+              catalogResolution.warnings.push(
+                `La finition « ${input.trim} » a été rapprochée de « ${trim.label} » dans le catalogue Leboncoin.`,
+              );
+            }
+          } else {
+            catalogResolution.warnings.push(
+              "La finition exacte n'a pas été trouvée dans le catalogue Leboncoin.",
+            );
+          }
+          if (trims.cacheStatus === "stale") {
+            catalogResolution.warnings.push(
+              "Les finitions proviennent d'un cache Leboncoin périmé.",
+            );
+          }
+        } catch (trimError) {
+          console.error("[LBC resolver] Trim discovery failed:", trimError);
+          catalogResolution.warnings.push(
+            "Leboncoin n'a pas pu confirmer la finition pour le moment.",
+          );
+        }
+      }
+      return catalogResolution;
+    }
+  } catch (catalogError) {
+    console.error("[LBC resolver] Catalog discovery failed:", catalogError);
+    catalogWarning =
+      "Le catalogue Leboncoin est indisponible ; résolution de secours utilisée.";
+  }
+
+  if (local.source === "catalog") {
+    return catalogWarning
+      ? { ...local, warnings: [...local.warnings, catalogWarning] }
+      : local;
+  }
 
   let ads: LeboncoinAd[] = [];
   const searchParams = {
@@ -356,10 +540,14 @@ export async function resolveLeboncoinVehicleWithDiscovery(
       ...local,
       warnings: [
         ...local.warnings,
+        ...(catalogWarning ? [catalogWarning] : []),
         "Leboncoin n'a pas pu confirmer l'identifiant pour le moment.",
       ],
     };
   }
 
-  return resolveLeboncoinVehicle(input, ads);
+  const observed = resolveLeboncoinVehicle(input, ads);
+  return catalogWarning
+    ? { ...observed, warnings: [...observed.warnings, catalogWarning] }
+    : observed;
 }

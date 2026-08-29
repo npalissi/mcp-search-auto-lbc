@@ -7,7 +7,12 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createInterface, type Interface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import type { LeboncoinAd, LeboncoinSearchParams } from "./types";
+import type {
+  LeboncoinAd,
+  LeboncoinSearchParams,
+  LeboncoinVehicleCatalog,
+  LeboncoinVehicleTrims,
+} from "./types";
 
 const FUEL_MAP: Record<string, string> = {
   "hybride rechargeable": "8",
@@ -84,7 +89,7 @@ function getPythonPath(): string {
 type WorkerSuccess = {
   id: number;
   ok: true;
-  ads: LeboncoinAd[];
+  result: unknown;
 };
 
 type WorkerFailure = {
@@ -99,7 +104,7 @@ type WorkerFailure = {
 type WorkerResponse = WorkerSuccess | WorkerFailure;
 
 type PendingRequest = {
-  resolve: (ads: LeboncoinAd[]) => void;
+  resolve: (result: unknown) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
 };
@@ -143,7 +148,7 @@ function handleWorkerLine(line: string): void {
   clearTimeout(pending.timeout);
 
   if (response.ok) {
-    pending.resolve(response.ads);
+    pending.resolve(response.result);
     return;
   }
 
@@ -209,32 +214,46 @@ export function normalizeModel(model: string): string {
 export function searchLeboncoinViaPython(
   params: LeboncoinSearchParams,
 ): Promise<LeboncoinAd[]> {
-  const child = startWorker();
-  const requestId = nextRequestId;
-  nextRequestId += 1;
-  const timeoutMs = Math.max(
-    10_000,
-    Number(process.env.LBC_WORKER_TIMEOUT_MS ?? 90_000),
-  );
   const maxPages = Math.min(
     5,
     Math.max(1, params.maxPages ?? Number(process.env.LBC_MAX_PAGES ?? 3)),
   );
+  return requestWorker<LeboncoinAd[]>(
+    "search",
+    { ...params, maxPages },
+    Math.max(10_000, Number(process.env.LBC_WORKER_TIMEOUT_MS ?? 90_000)),
+  );
+}
 
-  return new Promise<LeboncoinAd[]>((resolve, reject) => {
+function requestWorker<T>(
+  action: string,
+  params: Record<string, unknown>,
+  timeoutMs = 30_000,
+): Promise<T> {
+  const child = startWorker();
+  const requestId = nextRequestId;
+  nextRequestId += 1;
+
+  return new Promise<T>((resolve, reject) => {
     const timeout = setTimeout(() => {
       pendingRequests.delete(requestId);
-      reject(new Error(`Python Leboncoin request timed out after ${timeoutMs} ms.`));
+      reject(
+        new Error(
+          `Python Leboncoin ${action} request timed out after ${timeoutMs} ms.`,
+        ),
+      );
       child.kill();
     }, timeoutMs);
 
-    pendingRequests.set(requestId, { resolve, reject, timeout });
+    pendingRequests.set(requestId, {
+      resolve: (result) => resolve(result as T),
+      reject,
+      timeout,
+    });
     const request = JSON.stringify({
       id: requestId,
-      params: {
-        ...params,
-        maxPages,
-      },
+      action,
+      params,
     });
     child.stdin.write(`${request}\n`, (error) => {
       if (!error) return;
@@ -245,6 +264,27 @@ export function searchLeboncoinViaPython(
       pending.reject(error);
     });
   });
+}
+
+export function getLeboncoinVehicleCatalogViaPython(
+  forceRefresh = false,
+): Promise<LeboncoinVehicleCatalog> {
+  return requestWorker<LeboncoinVehicleCatalog>(
+    "vehicle_catalog",
+    { forceRefresh },
+    45_000,
+  );
+}
+
+export function getLeboncoinVehicleTrimsViaPython(
+  leboncoinModel: string,
+  forceRefresh = false,
+): Promise<LeboncoinVehicleTrims> {
+  return requestWorker<LeboncoinVehicleTrims>(
+    "vehicle_trims",
+    { leboncoinModel, forceRefresh },
+    30_000,
+  );
 }
 
 export function stopLeboncoinPythonWorker(): void {
