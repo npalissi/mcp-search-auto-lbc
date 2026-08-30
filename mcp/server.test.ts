@@ -43,6 +43,8 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
   let receivedExcludeCompanyVehicles = false;
   let receivedExcludeProfessionalSellers = false;
   let receivedRadiusKm = 0;
+  let receivedYearMin = 0;
+  let receivedYearMax = 0;
   const app = createMcpHttpApp({
     estimator: async (request) => {
       receivedBrand = request.brand;
@@ -50,6 +52,8 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
       receivedExcludeProfessionalSellers =
         request.excludeProfessionalSellers ?? false;
       receivedRadiusKm = request.location?.radiusKm ?? 0;
+      receivedYearMin = request.yearMin ?? 0;
+      receivedYearMax = request.yearMax ?? 0;
       return { ...fixture, request };
     },
   });
@@ -101,6 +105,8 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
         leboncoinModel: "RENAULT_Clio",
         generation: "3",
         year: 2010,
+        yearMin: 2009,
+        yearMax: 2011,
         mileage: 100_000,
         fuel: "diesel",
         excludeCompanyVehicles: true,
@@ -118,6 +124,8 @@ test("expose le tool de cote sur le endpoint MCP Streamable HTTP", async () => {
     assert.equal(receivedExcludeCompanyVehicles, true);
     assert.equal(receivedExcludeProfessionalSellers, true);
     assert.equal(receivedRadiusKm, 200);
+    assert.equal(receivedYearMin, 2009);
+    assert.equal(receivedYearMax, 2011);
     assert.equal(
       (response.structuredContent as { valuation: { estimatedPrice: number } })
         .valuation.estimatedPrice,

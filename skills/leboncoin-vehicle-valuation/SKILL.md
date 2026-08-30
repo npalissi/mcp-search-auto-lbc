@@ -58,6 +58,28 @@ Pour construire ou diagnostiquer un payload brut, lire
 Sauf demande contraire de l'utilisateur, rechercher uniquement les annonces de
 particuliers avec `excludeProfessionalSellers: true`.
 
+L'année demandée est un critère strict. Transmettre l'année exacte dans `year`
+et ne jamais élargir automatiquement la recherche aux années voisines. Lorsque
+`yearMin` et `yearMax` sont omis, le MCP utilise `year` comme borne basse et
+borne haute et exclut aussi les annonces dont l'année est absente.
+
+Utiliser `yearMin` et `yearMax` uniquement lorsque l'utilisateur demande
+explicitement un intervalle ou plusieurs années. Toujours conserver dans `year`
+l'année de référence, comprise dans cet intervalle. Exemple pour une cote 2021
+acceptant volontairement les modèles de 2020 à 2022 :
+
+```json
+{
+  "year": 2021,
+  "yearMin": 2020,
+  "yearMax": 2022
+}
+```
+
+Ne jamais élargir cet intervalle parce que le volume d'annonces est faible. Le
+signaler plutôt comme une limite de fiabilité. Dans la réponse, préciser
+l'intervalle utilisé dès qu'il ne correspond pas à une année unique.
+
 Pour ce projet, utiliser par défaut une zone de 200 km autour de Saintes. Si
 l'utilisateur demande une autre ville ou un autre rayon, utiliser cette nouvelle
 zone à la place :

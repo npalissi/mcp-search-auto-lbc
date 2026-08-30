@@ -16,6 +16,8 @@ export type VehicleValuationRequest = {
   leboncoinBrand?: string;
   leboncoinModel?: string;
   year: number;
+  yearMin?: number;
+  yearMax?: number;
   mileage: number;
   generation?: string;
   fuel?: string;
@@ -108,6 +110,33 @@ const FINANCING_PATTERNS = [
   /(?:apport|premier loyer)/i,
   /\b\d+\s*€?\s*\/\s*mois\b/i,
 ];
+
+type RequestedYearRange = {
+  min: number;
+  max: number;
+};
+
+function requestedYearRange(
+  request: VehicleValuationRequest,
+): RequestedYearRange {
+  if ((request.yearMin == null) !== (request.yearMax == null)) {
+    throw new Error("yearMin et yearMax doivent être fournis ensemble.");
+  }
+  const min = request.yearMin ?? request.year;
+  const max = request.yearMax ?? request.year;
+
+  if (!Number.isInteger(min) || !Number.isInteger(max)) {
+    throw new Error("Les bornes d'année doivent être des nombres entiers.");
+  }
+  if (min > max) {
+    throw new Error("yearMin doit être inférieur ou égal à yearMax.");
+  }
+  if (request.year < min || request.year > max) {
+    throw new Error("L'année de référence doit être comprise entre yearMin et yearMax.");
+  }
+
+  return { min, max };
+}
 
 const COMPANY_VEHICLE_PATTERNS = [
   /\baffaire\b/i,
@@ -308,8 +337,15 @@ function hardExclusionReasons(
       reasons.push("annonce publiée par un vendeur professionnel");
     }
   }
-  if (ad.year && Math.abs(ad.year - request.year) > 5) {
-    reasons.push("année trop éloignée");
+  const yearRange = requestedYearRange(request);
+  if (ad.year == null) {
+    reasons.push("année absente");
+  } else if (ad.year < yearRange.min || ad.year > yearRange.max) {
+    reasons.push(
+      yearRange.min === yearRange.max
+        ? `année différente de ${yearRange.min}`
+        : `année hors intervalle ${yearRange.min}–${yearRange.max}`,
+    );
   }
   if (ad.mileage && Math.abs(ad.mileage - request.mileage) > 120_000) {
     reasons.push("kilométrage trop éloigné");
@@ -438,6 +474,7 @@ export function calculateAdvancedValuation(
   request: VehicleValuationRequest,
   fetchedAds: LeboncoinAd[],
 ): AdvancedVehicleValuation {
+  requestedYearRange(request);
   const excludedAds: ExcludedAd[] = [];
   const candidates: LeboncoinAd[] = [];
   const ads = uniqueAds(fetchedAds);
@@ -556,33 +593,39 @@ export function calculateAdvancedValuation(
 export async function estimateUsedVehicle(
   request: VehicleValuationRequest,
 ): Promise<AdvancedVehicleValuation> {
-  const cacheKey = JSON.stringify(request);
+  const yearRange = requestedYearRange(request);
+  const normalizedRequest: VehicleValuationRequest = {
+    ...request,
+    yearMin: yearRange.min,
+    yearMax: yearRange.max,
+  };
+  const cacheKey = JSON.stringify(normalizedRequest);
   const cached = valuationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.result;
   if (cached) valuationCache.delete(cacheKey);
 
   const resolution = await resolveLeboncoinVehicleWithDiscovery({
-    brand: request.brand,
-    model: request.model,
-    generation: request.generation,
-    fuel: request.fuel,
-    engine: request.engine,
-    trim: request.trim,
+    brand: normalizedRequest.brand,
+    model: normalizedRequest.model,
+    generation: normalizedRequest.generation,
+    fuel: normalizedRequest.fuel,
+    engine: normalizedRequest.engine,
+    trim: normalizedRequest.trim,
     discoverFromLeboncoin: true,
   });
   const useResolvedIdentifiers = resolution.confidenceScore >= 90;
   const effectiveRequest: VehicleValuationRequest = {
-    ...request,
-    brand: resolution.brand ?? request.brand,
-    model: resolution.model || request.model,
-    generation: resolution.generation ?? request.generation,
-    fuel: resolution.fuel ?? request.fuel,
-    trim: resolution.trim ?? request.trim,
+    ...normalizedRequest,
+    brand: resolution.brand ?? normalizedRequest.brand,
+    model: resolution.model || normalizedRequest.model,
+    generation: resolution.generation ?? normalizedRequest.generation,
+    fuel: resolution.fuel ?? normalizedRequest.fuel,
+    trim: resolution.trim ?? normalizedRequest.trim,
     leboncoinBrand:
-      request.leboncoinBrand ??
+      normalizedRequest.leboncoinBrand ??
       (useResolvedIdentifiers ? resolution.leboncoinBrand : undefined),
     leboncoinModel:
-      request.leboncoinModel ??
+      normalizedRequest.leboncoinModel ??
       (useResolvedIdentifiers ? resolution.leboncoinModel : undefined),
   };
 
@@ -595,8 +638,8 @@ export async function estimateUsedVehicle(
     model: effectiveRequest.model,
     lbcBrand: effectiveRequest.leboncoinBrand,
     lbcModel: effectiveRequest.leboncoinModel,
-    yearMin: effectiveRequest.year - 2,
-    yearMax: effectiveRequest.year + 2,
+    yearMin: effectiveRequest.yearMin,
+    yearMax: effectiveRequest.yearMax,
     mileageMin: Math.max(0, effectiveRequest.mileage - mileageMargin),
     mileageMax: effectiveRequest.mileage + mileageMargin,
     fuel: effectiveRequest.fuel ? fuelToLbcCode(effectiveRequest.fuel) : undefined,

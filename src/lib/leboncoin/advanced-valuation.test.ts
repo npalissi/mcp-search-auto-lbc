@@ -37,6 +37,8 @@ test("calcule une cote avec les annonces comparables et explique les exclusions"
       engine: "1.5 dCi",
       fuel: "diesel",
       year: 2010,
+      yearMin: 2009,
+      yearMax: 2011,
       mileage: 100_000,
       maxComparables: 10,
     },
@@ -99,6 +101,132 @@ test("calcule une cote avec les annonces comparables et explique les exclusions"
     result.excludedAds.some((item) =>
       item.reasons.some((reason) => reason.includes("réparations")),
     ),
+  );
+});
+
+test("filtre sur l'année exacte par défaut", () => {
+  const result = calculateAdvancedValuation(
+    {
+      brand: "Peugeot",
+      model: "208",
+      year: 2021,
+      mileage: 100_000,
+    },
+    [
+      ad(40, 11_500, {
+        title: "Peugeot 208",
+        year: 2021,
+        attributes: { brand: "Peugeot", model: "208", regdate: "2021" },
+      }),
+      ad(41, 10_500, {
+        title: "Peugeot 208",
+        year: 2020,
+        attributes: { brand: "Peugeot", model: "208", regdate: "2020" },
+      }),
+      ad(42, 12_500, {
+        title: "Peugeot 208",
+        year: 2022,
+        attributes: { brand: "Peugeot", model: "208", regdate: "2022" },
+      }),
+      ad(43, 11_000, {
+        title: "Peugeot 208",
+        year: undefined,
+        attributes: { brand: "Peugeot", model: "208" },
+      }),
+    ],
+  );
+
+  assert.deepEqual(result.comparables.map((item) => item.id), [40]);
+  assert.ok(
+    result.excludedAds.some(
+      (item) => item.id === 41 && item.reasons.includes("année différente de 2021"),
+    ),
+  );
+  assert.ok(
+    result.excludedAds.some(
+      (item) => item.id === 43 && item.reasons.includes("année absente"),
+    ),
+  );
+});
+
+test("accepte un intervalle d'années explicite", () => {
+  const result = calculateAdvancedValuation(
+    {
+      brand: "Peugeot",
+      model: "208",
+      year: 2021,
+      yearMin: 2020,
+      yearMax: 2022,
+      mileage: 100_000,
+    },
+    [
+      ad(50, 10_500, {
+        title: "Peugeot 208",
+        year: 2020,
+        attributes: { brand: "Peugeot", model: "208", regdate: "2020" },
+      }),
+      ad(51, 11_500, {
+        title: "Peugeot 208",
+        year: 2021,
+        attributes: { brand: "Peugeot", model: "208", regdate: "2021" },
+      }),
+      ad(52, 12_500, {
+        title: "Peugeot 208",
+        year: 2022,
+        attributes: { brand: "Peugeot", model: "208", regdate: "2022" },
+      }),
+      ad(53, 9_500, {
+        title: "Peugeot 208",
+        year: 2019,
+        attributes: { brand: "Peugeot", model: "208", regdate: "2019" },
+      }),
+    ],
+  );
+
+  assert.deepEqual(
+    result.comparables.map((item) => item.year).sort(),
+    [2020, 2021, 2022],
+  );
+  assert.ok(
+    result.excludedAds.some(
+      (item) =>
+        item.id === 53 && item.reasons.includes("année hors intervalle 2020–2022"),
+    ),
+  );
+});
+
+test("refuse un intervalle d'années incohérent", () => {
+  assert.throws(
+    () =>
+      calculateAdvancedValuation(
+        {
+          brand: "Peugeot",
+          model: "208",
+          year: 2021,
+          yearMin: 2022,
+          yearMax: 2020,
+          mileage: 100_000,
+        },
+        [],
+      ),
+    /yearMin doit être inférieur ou égal à yearMax/,
+  );
+});
+
+test("refuse une seule borne d'année", () => {
+  assert.throws(
+    () =>
+      calculateAdvancedValuation(
+        {
+          brand: "Peugeot",
+          model: "208",
+          year: 2021,
+          yearMin: 2020,
+          mileage: 100_000,
+        },
+        [],
+      ),
+    /yearMin et yearMax doivent être fournis ensemble/,
   );
 });
 

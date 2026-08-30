@@ -117,6 +117,8 @@ Example input:
   "leboncoinModel": "RENAULT_Clio",
   "generation": "3",
   "year": 2010,
+  "yearMin": 2010,
+  "yearMax": 2010,
   "mileage": 100000,
   "fuel": "diesel",
   "engine": "1.5 dCi 90",
@@ -135,6 +137,13 @@ Example input:
   "includeImages": true
 }
 ```
+
+`year` is exact by default: when `yearMin` and `yearMax` are omitted, only ads
+whose registration year equals `year` are retained. Set both bounds only when
+the user explicitly requests a range, for example `year: 2021`, `yearMin: 2020`
+and `yearMax: 2022`. The reference `year` must be inside that range. The MCP
+also rejects ads with a missing year or a year outside the requested bounds
+before calculating the valuation.
 
 Leboncoin's exact filter IDs are different from the labels displayed to users:
 

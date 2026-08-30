@@ -64,7 +64,32 @@ const vehicleInputSchema = {
     .min(1)
     .optional()
     .describe("Génération, par exemple 3, III ou Phase 2"),
-  year: z.number().int().min(1980).max(new Date().getFullYear() + 1),
+  year: z
+    .number()
+    .int()
+    .min(1980)
+    .max(new Date().getFullYear() + 1)
+    .describe(
+      "Année de référence du véhicule. Par défaut, seules les annonces de cette année exacte sont retenues",
+    ),
+  yearMin: z
+    .number()
+    .int()
+    .min(1980)
+    .max(new Date().getFullYear() + 1)
+    .optional()
+    .describe(
+      "Borne basse facultative. Ne l'utiliser que si l'utilisateur demande explicitement un intervalle d'années",
+    ),
+  yearMax: z
+    .number()
+    .int()
+    .min(1980)
+    .max(new Date().getFullYear() + 1)
+    .optional()
+    .describe(
+      "Borne haute facultative. Ne l'utiliser que si l'utilisateur demande explicitement un intervalle d'années",
+    ),
   mileage: z.number().int().min(0).max(1_500_000),
   fuel: z
     .string()
